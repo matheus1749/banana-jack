@@ -19,6 +19,7 @@ export function buildApp() {
   // Serve frontend static files in production
   const frontendDist = path.resolve(__dirname, '../../frontend/dist');
   const hasFrontend = existsSync(frontendDist);
+  app.log.info(`Frontend dist path: ${frontendDist}, exists: ${hasFrontend}`);
 
   app.register(cors, {
     origin: (origin, cb) => {
