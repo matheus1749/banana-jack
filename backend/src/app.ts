@@ -13,28 +13,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export function buildApp() {
   const app = Fastify({ logger: true });
+
   const uploadDir = path.resolve(process.cwd(), 'src', 'uploads');
   mkdirSync(uploadDir, { recursive: true });
 
-  // Serve frontend static files in production
   const frontendDist = path.resolve(__dirname, '../../frontend/dist');
   const hasFrontend = existsSync(frontendDist);
-  app.log.info(`Frontend dist path: ${frontendDist}, exists: ${hasFrontend}`);
+  app.log.info(`Frontend dist: ${frontendDist} | exists: ${hasFrontend}`);
 
   app.register(cors, {
     origin: (origin, cb) => {
       const configured = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
-      if (!origin) {
-        cb(null, true);
-        return;
-      }
-
+      if (!origin) { cb(null, true); return; }
       const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
-      if (origin === configured || isLocalhost) {
-        cb(null, true);
-        return;
-      }
-
+      if (origin === configured || isLocalhost) { cb(null, true); return; }
       cb(new Error('Origin not allowed by CORS'), false);
     },
     credentials: true,
@@ -45,25 +37,22 @@ export function buildApp() {
     sign: { expiresIn: '30m' },
   });
 
-  app.register(multipart, {
-    limits: { fileSize: 8 * 1024 * 1024 },
-  });
+  app.register(multipart, { limits: { fileSize: 8 * 1024 * 1024 } });
+
+  // Serve uploaded files
   app.register(fastifyStatic, {
     root: uploadDir,
     prefix: '/files/',
+    decorateReply: true,
   });
 
-  // Serve frontend if built
+  // Serve frontend SPA (production)
   if (hasFrontend) {
     app.register(fastifyStatic, {
       root: frontendDist,
       prefix: '/',
       decorateReply: false,
-    });
-
-    // SPA fallback
-    app.setNotFoundHandler((_req, reply) => {
-      reply.sendFile('index.html', frontendDist);
+      index: 'index.html',
     });
   }
 
@@ -79,6 +68,13 @@ export function buildApp() {
   app.decorate('uploadDir', uploadDir);
 
   app.get('/health', async () => ({ ok: true }));
+
+  // SPA fallback — serve index.html para qualquer rota não encontrada
+  if (hasFrontend) {
+    app.setNotFoundHandler((_req, reply) => {
+      reply.sendFile('index.html', frontendDist);
+    });
+  }
 
   return app;
 }
